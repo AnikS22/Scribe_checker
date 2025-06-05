@@ -1,0 +1,68 @@
+{
+    "lumbar mri": {
+        "cpt": "72148",
+        "lcd": "L34220",
+        "required_fields": [
+            "severity",
+            "duration",
+            "functional_limitations",
+            "objective_findings.neurological_deficits"
+        ]
+    },
+    "facet joint injection": {
+        "cpt": "64493",
+        "lcd": "L34993",
+        "required_fields": [
+            "pain_rating",
+            "prior_treatment",
+            "objective_findings.tenderness"
+        ]
+    },
+    "physical therapy": {
+        "cpt": "97110",
+        "lcd": "L33611",
+        "required_fields": [
+            "functional_limitations",
+            "prior_treatment",
+            "assessment"
+        ]
+    },
+    "epidural injection": {
+        "cpt": "62323",
+        "lcd": "L34993",
+        "required_fields": [
+            "pain_rating",
+            "prior_treatment",
+            "objective_findings.neurological_deficits",
+            "duration"
+        ]
+    },
+    "cervical mri": {
+        "cpt": "72141",
+        "lcd": "L34220",
+        "required_fields": [
+            "severity",
+            "duration",
+            "functional_limitations",
+            "objective_findings.neurological_deficits"
+        ]
+    },
+    "manipulation": {
+        "cpt": "98940",
+        "lcd": "L33611",
+        "required_fields": [
+            "pain_rating",
+            "objective_findings.range_of_motion",
+            "prior_treatment"
+        ]
+    },
+    "trigger point injection": {
+        "cpt": "20552",
+        "lcd": "L34993",
+        "required_fields": [
+            "pain_rating",
+            "objective_findings.tenderness",
+            "prior_treatment"
+        ]
+    }
+} 
