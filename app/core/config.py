@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # OpenAI Settings
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
     # Future-proofing
     DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
