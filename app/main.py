@@ -136,8 +136,8 @@ def anonymize_transcript(transcript: str) -> str:
     return transcript
 
 class PainRating(BaseModel):
-    level: Optional[int]
-    location: Optional[str]
+    level: Optional[int] = None
+    location: Optional[str] = None
 
 class TranscriptRequest(BaseModel):
     transcript: str
@@ -145,20 +145,24 @@ class TranscriptRequest(BaseModel):
     visit_date: Optional[datetime] = None
 
 class TranscriptResponse(BaseModel):
-    date: str
-    diagnosis: str
-    pain_rating: Optional[PainRating]
-    prior_treatment: List[str]
-    subjective_complaints: str
-    objective_findings: Dict[str, Any]
-    assessment: str
-    plan: List[str]
-    functional_limitations: str
-    symptom_duration: str
-    procedures_mentioned: List[str]
-    cpt_suggestions: List[str]
-    lcd_codes: List[str]
-    lcd_warnings: List[str]
+    date: Optional[str] = None
+    diagnosis: Optional[str] = None
+    pain_rating: Optional[PainRating] = None
+    prior_treatment: Optional[List[str]] = []
+    subjective_complaints: Optional[str] = None
+    objective_findings: Optional[Dict[str, Any]] = {
+        "range_of_motion": None,
+        "tenderness": None,
+        "neurological_deficits": None
+    }
+    assessment: Optional[str] = None
+    plan: Optional[List[str]] = []
+    functional_limitations: Optional[str] = None
+    symptom_duration: Optional[str] = None
+    procedures_mentioned: Optional[List[str]] = []
+    cpt_suggestions: Optional[List[str]] = []
+    lcd_codes: Optional[List[str]] = []
+    lcd_warnings: Optional[List[str]] = []
 
 @app.post("/process_transcript", response_model=TranscriptResponse)
 async def process_transcript(
