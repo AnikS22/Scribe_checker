@@ -1,12 +1,12 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from fastapi.responses import JSONResponse
-import openai
-import shutil
-import os
+from fastapi import APIRouter, File, UploadFile, HTTPException, Security
+from fastapi.security import APIKeyHeader
+from openai import AsyncOpenAI
 import logging
 from typing import Dict, Any
+import json
+
 from app.core.config import settings
-from app.core.auth import verify_api_key
+from app.core.security import verify_api_key
 from app.services.transcript_processor import TranscriptProcessor
 from app.services.cpt_lcd_matcher import CPTLCDMatcher
 from app.models.transcript_response import TranscriptResponse
@@ -14,172 +14,16 @@ from app.models.transcript_response import TranscriptResponse
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client
-client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-
-# Initialize transcript processor
-transcript_processor = TranscriptProcessor()
+# API Key security
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
 
 router = APIRouter()
-
-@router.post("/transcribe", response_model=Dict[str, Any])
-async def transcribe_audio(
-    file: UploadFile = File(...),
-    api_key: str = Depends(verify_api_key)
-) -> Dict[str, Any]:
-    """
-    Transcribe an audio file using OpenAI's Whisper API and process the transcript.
-    
-    Args:
-        file: Audio file uploaded via multipart/form-data
-        api_key: API key for authentication
-        
-    Returns:
-        Dict containing:
-        - transcript: Raw transcript text
-        - processed_data: Structured clinical data
-        - error: Any error message (if applicable)
-        
-    Raises:
-        HTTPException: For various error conditions
-    """
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file provided")
-    
-    # Validate file type
-    allowed_types = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/mp4"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}"
-        )
-    
-    try:
-        # Create temp directory if it doesn't exist
-        temp_dir = "temp_audio"
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        # Save uploaded file to temp directory
-        file_location = os.path.join(temp_dir, f"temp_{file.filename}")
-        try:
-            with open(file_location, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            
-            # Transcribe using Whisper API
-            logger.info(f"Transcribing audio file: {file.filename}")
-            with open(file_location, "rb") as audio_file:
-                response = await client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="json"
-                )
-            
-            transcript_text = response.text
-            
-            # Process the transcript
-            logger.info("Processing transcript with GPT")
-            processed_data = await transcript_processor.process(transcript_text)
-            
-            return {
-                "transcript": transcript_text,
-                "processed_data": processed_data,
-                "error": None
-            }
-            
-        finally:
-            # Clean up temp file
-            if os.path.exists(file_location):
-                os.remove(file_location)
-                
-    except openai.APIError as e:
-        logger.error(f"OpenAI API error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error transcribing audio: {str(e)}"
-        )
-    except Exception as e:
-        logger.error(f"Error processing audio file: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing audio file: {str(e)}"
-        )
-
-@router.post("/transcribe-only", response_model=Dict[str, str])
-async def transcribe_only(
-    file: UploadFile = File(...),
-    api_key: str = Depends(verify_api_key)
-) -> Dict[str, str]:
-    """
-    Transcribe an audio file using OpenAI's Whisper API without additional processing.
-    This endpoint is useful for testing or when only the raw transcript is needed.
-    
-    Args:
-        file: Audio file uploaded via multipart/form-data
-        api_key: API key for authentication
-        
-    Returns:
-        Dict containing:
-        - text: Raw transcript text
-        - error: Any error message (if applicable)
-    """
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file provided")
-    
-    # Validate file type
-    allowed_types = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/mp4"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}"
-        )
-    
-    try:
-        # Create temp directory if it doesn't exist
-        temp_dir = "temp_audio"
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        # Save uploaded file to temp directory
-        file_location = os.path.join(temp_dir, f"temp_{file.filename}")
-        try:
-            with open(file_location, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            
-            # Transcribe using Whisper API
-            logger.info(f"Transcribing audio file: {file.filename}")
-            with open(file_location, "rb") as audio_file:
-                response = await client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="json"
-                )
-            
-            return {
-                "text": response.text,
-                "error": None
-            }
-            
-        finally:
-            # Clean up temp file
-            if os.path.exists(file_location):
-                os.remove(file_location)
-                
-    except openai.APIError as e:
-        logger.error(f"OpenAI API error: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"text": None, "error": f"Error transcribing audio: {str(e)}"}
-        )
-    except Exception as e:
-        logger.error(f"Error processing audio file: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"text": None, "error": f"Error processing audio file: {str(e)}"}
-        )
+openai = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 @router.post("/transcribe_audio", response_model=TranscriptResponse)
 async def transcribe_audio(
     file: UploadFile = File(...),
-    api_key: str = Depends(verify_api_key)
+    api_key: str = Security(API_KEY_HEADER)
 ) -> TranscriptResponse:
     """
     Transcribe audio file to text and process it into structured clinical data.
@@ -201,7 +45,7 @@ async def transcribe_audio(
         
         # Transcribe audio using Whisper
         logger.info(f"Transcribing audio file: {file.filename}")
-        response = await client.audio.transcriptions.create(
+        response = await openai.audio.transcriptions.create(
             model="whisper-1",
             file=(file.filename, audio_bytes),
             response_format="text"
@@ -213,6 +57,7 @@ async def transcribe_audio(
             logger.debug("Transcribed text: %s", transcript)
         
         # Initialize processors
+        transcript_processor = TranscriptProcessor()
         cpt_lcd_matcher = CPTLCDMatcher()
         
         # Process transcript

@@ -49,7 +49,7 @@ class TranscriptProcessor:
 📌 history_of_present_illness
 - Look for narrative describing onset, duration, and progression
 - Example: "has had back pain for 2 months..."
-- Include relevant symptoms and their timeline
+- Include relevant history and context
 
 📌 pain_rating
 - Look for pain scale (0-10) and location
@@ -65,27 +65,27 @@ class TranscriptProcessor:
 📌 plan
 - Extract future treatments and recommendations
 - Examples: "Plan is to get MRI", "Referred to PT"
-- Include follow-up plans and referrals
+- Include all proposed interventions
 
 📌 prior_treatments
-- Document past medical procedures and treatments
+- Document past medical procedures
 - Examples: "previous injections", "underwent PT for 6 weeks"
 - Include duration and outcomes if mentioned
 
 📌 exam_findings
 - Extract specific clinical exam signs
 - Examples: "Positive straight leg raise", "reduced reflexes"
-- Include objective measurements and test results
+- Include all documented physical findings
 
 📌 imaging_summary
-- Document any imaging results mentioned
+- Document any imaging results
 - Example: "MRI showed disc bulge at L5-S1"
-- Include modality, findings, and relevant levels
+- Include modality and key findings
 
 📌 qpp_measures
 - Identify quality program measures
 - Examples: "Tobacco use screening", "Pain reassessment"
-- Include measure status: "Met", "Exclusion", or "Denied"
+- Match to CMS quality measures
 
 📌 recommended_cpt_codes
 - Match procedures to real CPT codes from 2024 CPT Codebook
@@ -101,8 +101,9 @@ class TranscriptProcessor:
   ],
   "lcd_status": "Meets"
 }
-- Include ALL relevant CPT codes mentioned or implied
-- Validate against LCD requirements when applicable
+- Include ALL relevant procedures mentioned
+- Validate against LCD requirements
+- Set appropriate LCD status
 
 🎯 Your output must follow this structure:
 
