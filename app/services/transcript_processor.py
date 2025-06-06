@@ -14,7 +14,9 @@ class TranscriptProcessor:
 
 ⚠️ RULES:
 - ONLY use information directly stated in the transcript. Never infer, assume, or fabricate.
-- Leave fields as "Not specified" or null if missing.
+- For each field, attempt to extract relevant content even if paraphrased.
+- Do not leave fields as null if relevant information can be inferred or paraphrased from the transcript.
+- Use "Not specified" only if nothing at all is related to that field.
 - There may be **multiple CPT codes** mentioned or implied. Identify and include ALL that are medically relevant.
 - Match each CPT to **medically necessary procedures** described.
 - If a CPT code is linked or requires a LCD, include:
@@ -45,65 +47,80 @@ class TranscriptProcessor:
 - Look for the first mention of the patient's main problem
 - Common phrases: "came in for...", "complains of...", "chief concern is..."
 - Extract the primary reason for visit
+- Include any severity or duration mentioned
 
 📌 history_of_present_illness
 - Look for narrative describing onset, duration, and progression
 - Example: "has had back pain for 2 months..."
 - Include relevant history and context
+- Capture any aggravating/alleviating factors
+- Note any previous episodes or related conditions
 
 📌 pain_rating
 - Look for pain scale (0-10) and location
 - Example: "rates it 7 out of 10 in lower back"
 - Extract both numeric level and anatomical location
+- Include any modifiers (e.g., "sharp", "dull", "radiating")
 
 📌 assessment
 - Look for diagnoses and clinical impressions
 - Common phrases: "Diagnosed with...", "Impression:"
 - Include ICD terms like "radiculopathy", "herniation"
 - List all identified conditions
+- Include any differential diagnoses mentioned
 
 📌 plan
 - Extract future treatments and recommendations
 - Examples: "Plan is to get MRI", "Referred to PT"
 - Include all proposed interventions
+- Note any follow-up appointments or referrals
+- Include medication changes or new prescriptions
+
+📌 exam_findings
+- Extract ALL physical exam findings, even if paraphrased
+- Look for:
+  * Inspection findings (e.g., "swelling", "deformity", "erythema")
+  * Palpation results (e.g., "tenderness", "masses", "temperature changes")
+  * Range of motion assessments (e.g., "limited flexion", "full extension")
+  * Neurological exam (e.g., "reflexes", "sensation", "strength")
+  * Special tests (e.g., "positive straight leg raise", "negative FABER")
+  * Gait and posture observations
+  * Any other physical examination findings
+- Summarize findings in a structured format
+- Include both normal and abnormal findings
+- Note any asymmetry or comparison to contralateral side
+
+📌 imaging_summary
+- Extract ALL imaging results mentioned, even if paraphrased
+- Look for:
+  * X-ray findings (e.g., "degenerative changes", "fracture", "alignment")
+  * MRI results (e.g., "disc herniation", "stenosis", "signal changes")
+  * CT scan findings (e.g., "bony changes", "soft tissue")
+  * Ultrasound results (e.g., "fluid", "tendon changes")
+  * Any other imaging modalities
+- Include:
+  * Type of imaging
+  * Date if mentioned
+  * Key findings
+  * Comparison to previous studies if mentioned
+  * Any recommendations for additional imaging
+- Summarize in a clear, structured format
 
 📌 prior_treatments
 - Document past medical procedures
 - Examples: "previous injections", "underwent PT for 6 weeks"
 - Include duration and outcomes if mentioned
+- Note any medications tried
+- Include any previous surgeries or interventions
 
-📌 exam_findings
-- Extract specific clinical exam signs
-- Examples: "Positive straight leg raise", "reduced reflexes"
-- Include all documented physical findings
-
-📌 imaging_summary
-- Document any imaging results
-- Example: "MRI showed disc bulge at L5-S1"
-- Include modality and key findings
-
-📌 qpp_measures
-- Identify quality program measures
-- Examples: "Tobacco use screening", "Pain reassessment"
-- Match to CMS quality measures
-
-📌 recommended_cpt_codes
-- Match procedures to real CPT codes from 2024 CPT Codebook
-- Example structure:
-{
-  "code": "72148",
-  "description": "MRI lumbar spine w/o contrast",
-  "requires_lcd": true,
-  "lcd_code": "L34220",
-  "lcd_requirements": [
-    "Indication of radiculopathy or herniation",
-    "Failure of conservative therapy"
-  ],
-  "lcd_status": "Meets"
-}
-- Include ALL relevant procedures mentioned
-- Validate against LCD requirements
-- Set appropriate LCD status
+📌 follow_up_instructions
+- Extract all follow-up recommendations
+- Include:
+  * Next appointment details
+  * Medication instructions
+  * Activity modifications
+  * Home exercise program
+  * Any other specific instructions
 
 🎯 Your output must follow this structure:
 
@@ -130,26 +147,6 @@ class TranscriptProcessor:
   "review_of_systems": "...",
   "exam_findings": "...",
   "imaging_summary": "...",
-  "qpp_measures": [
-    {
-      "measure_id": "...",
-      "title": "...",
-      "status": "Met / Exclusion / Denied"
-    }
-  ],
-  "recommended_cpt_codes": [
-    {
-      "code": "...",
-      "description": "...",
-      "requires_lcd": true,
-      "lcd_code": "...",
-      "lcd_requirements": [
-        "Requirement 1 from CMS LCD",
-        "Requirement 2..."
-      ],
-      "lcd_status": "Meets / Partially Meets / Does Not Meet"
-    }
-  ],
   "follow_up_instructions": "...",
   "date": "YYYY-MM-DD"
 }"""
