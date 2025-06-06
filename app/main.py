@@ -16,6 +16,7 @@ from app.models.transcript_response import (
     TranscriptResponse, PatientInfo, PainRating,
     QPPMeasure, CPTCode
 )
+from app.routes.audio import router as audio_router
 
 # Configure logging
 logging.basicConfig(
@@ -38,6 +39,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
 
 # API Key security
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")

@@ -40,4 +40,5 @@ class TranscriptResponse(BaseModel):
     qpp_measures: Optional[List[QPPMeasure]] = []
     recommended_cpt_codes: Optional[List[CPTCode]] = []
     follow_up_instructions: Optional[str] = None
-    date: Optional[str] = None 
+    date: Optional[str] = None
+    prompt: Optional[str] = None  # Original transcript/prompt 
