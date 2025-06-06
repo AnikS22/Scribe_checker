@@ -10,7 +10,9 @@ import time # Import time for polling
 from app.core.config import settings
 from app.core.security import verify_api_key
 from app.services.transcript_processor import TranscriptProcessor
-from app.models.transcript_response import TranscriptResponse, LCDValidationResult, CPTCode, PatientInfo, PainRating
+# Import both response models
+from app.models.transcript_response import TranscriptResponse, LCDValidationResult, CPTCode, PatientInfo, PainRating, QPPMeasure
+from app.models.transcript_processor_response import TranscriptProcessorResponse # Import the new model
 from app.core.agents_config import AGENT_IDS # Import AGENT_IDS
 
 # Configure logging
@@ -131,17 +133,19 @@ async def transcribe_audio(
         # Agent1: Clinical_Extractor (TranscriptProcessor)
         logger.info("Calling Agent1: Clinical_Extractor (TranscriptProcessor)")
         transcript_processor = TranscriptProcessor()
-        extracted_data = await transcript_processor.process(transcript)
-
-        # Ensure recommended_cpt_codes are not included in extracted_data
-        extracted_data.pop("recommended_cpt_codes", None)
+        # Get raw data from TranscriptProcessor
+        extracted_data_raw = await transcript_processor.process(transcript)
+        
+        # Validate and structure the initial extracted data using TranscriptProcessorResponse
+        # This handles potential missing fields from the first agent gracefully
+        extracted_data = TranscriptProcessorResponse(**extracted_data_raw)
 
         # Agent 2: Json_to_icd
         logger.info("Calling Agent2: Json_to_icd")
         try:
             icd_codes_raw_response = await call_assistant_agent(
                 agent_id=AGENT_IDS["json_to_icd"],
-                input_data=extracted_data # Input is full extracted data
+                input_data=extracted_data.dict() # Pass dictionary representation
             )
             icd_parsed_data = json.loads(icd_codes_raw_response) if icd_codes_raw_response else {}
         except Exception as e:
@@ -153,19 +157,21 @@ async def transcribe_audio(
         logger.info("Calling Agent6: CPTcodes")
         # Prepare input for CPT agent including relevant fields from extracted_data and icd_codes
         cpt_agent_input = {
-            "chief_complaint": extracted_data.get("chief_complaint"),
-            "assessment": extracted_data.get("assessment"),
-            "plan": extracted_data.get("plan"),
-            "exam_findings": extracted_data.get("exam_findings"), # Include other relevant fields
-            "imaging_summary": extracted_data.get("imaging_summary"),
-            "history_of_present_illness": extracted_data.get("history_of_present_illness"),
-            "prior_treatments": extracted_data.get("prior_treatments"),
+            "chief_complaint": extracted_data.chief_complaint,
+            "assessment": extracted_data.assessment,
+            "plan": extracted_data.plan,
+            "exam_findings": extracted_data.exam_findings,
+            "imaging_summary": extracted_data.imaging_summary,
+            "history_of_present_illness": extracted_data.history_of_present_illness,
+            "prior_treatments": extracted_data.prior_treatments,
             "icd_codes": icd_parsed_data.get("icd_codes", []) # Include ICD codes from Agent 2
         }
+        # Ensure None values are not included in the input JSON for the agent unless strictly necessary
+        cpt_agent_input_cleaned = {k: v for k, v in cpt_agent_input.items() if v is not None}
         try:
             cpt_codes_raw_response = await call_assistant_agent(
                 agent_id=AGENT_IDS["cpt_codes"],
-                input_data=cpt_agent_input
+                input_data=cpt_agent_input_cleaned
             )
             cpt_parsed_data = json.loads(cpt_codes_raw_response) if cpt_codes_raw_response else {}
         except Exception as e:
@@ -193,26 +199,18 @@ async def transcribe_audio(
         # --- Merge Results ---
 
         logger.info("Merging agent results")
-        # Start with the data from the Clinical Extractor
-        response_data = extracted_data.copy()
+        # Assemble the final TranscriptResponse from validated extracted data and agent results
+        # Use .dict() to get a dictionary representation of the validated first-stage data
+        final_response = TranscriptResponse(
+            **extracted_data.dict(), # Include all fields from TranscriptProcessorResponse
+            icd_codes=icd_parsed_data.get("icd_codes", []), # Get from parsed ICD agent data, default to []
+            recommended_cpt_codes=cpt_parsed_data.get("recommended_cpt_codes", []), # Get from parsed CPT agent data, default to []
+            lcd_validation=lcd_parsed_data.get("lcd_validation", []) # Get from parsed LCD agent data, default to []
+            # Note: evidence_suggestions is also in TranscriptResponse and would need to be populated if you add that agent
+        )
 
-        # Add/Overwrite fields from other agents, using .get() with default empty list to guarantee presence
-        # Ensure parsed data is treated as a dictionary for safe .get() calls. Default to {} if parsing failed.
-        icd_dict = icd_parsed_data if isinstance(icd_parsed_data, dict) else {}
-        cpt_dict = cpt_parsed_data if isinstance(cpt_parsed_data, dict) else {}
-        lcd_dict = lcd_parsed_data if isinstance(lcd_parsed_data, dict) else {}
-
-        # Ensure recommended_cpt_codes from Agent 1 are ignored by not including them explicitly here
-        # We only take recommended_cpt_codes from the CPT agent (Agent 6)
-
-        response_data["icd_codes"] = icd_dict.get("icd_codes", [])
-        response_data["recommended_cpt_codes"] = cpt_dict.get("recommended_cpt_codes", [])
-        response_data["lcd_validation"] = lcd_dict.get("lcd_validation", [])
-        # Ensure prompt from Agent 1 is included
-        response_data["prompt"] = extracted_data.get("prompt", transcript) if extracted_data.get("prompt") else transcript
-
-        # Return the merged results using the Pydantic model for validation/serialization
-        return TranscriptResponse(**response_data)
+        # Return the merged results using the Pydantic model for final validation/serialization
+        return final_response
 
     except HTTPException as http_exc:
         # Re-raise HTTP exceptions directly
