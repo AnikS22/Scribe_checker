@@ -33,6 +33,77 @@ class TranscriptProcessor:
 - 2024 CPT Codebook (AMA)
 - ICD-10 mappings and QPP quality measures
 
+🔍 FIELD EXTRACTION GUIDELINES:
+
+📌 patient_info
+- "age": Look for phrases like "50-year-old" or "in his early 60s"
+- "sex": Derive from pronouns ("he/she") or explicit mention
+- "visit_date": Extract date in YYYY-MM-DD format
+- "visit_location": Look for clinic/hospital names
+
+📌 chief_complaint
+- Look for the first mention of the patient's main problem
+- Common phrases: "came in for...", "complains of...", "chief concern is..."
+- Extract the primary reason for visit
+
+📌 history_of_present_illness
+- Look for narrative describing onset, duration, and progression
+- Example: "has had back pain for 2 months..."
+- Include relevant symptoms and their timeline
+
+📌 pain_rating
+- Look for pain scale (0-10) and location
+- Example: "rates it 7 out of 10 in lower back"
+- Extract both numeric level and anatomical location
+
+📌 assessment
+- Look for diagnoses and clinical impressions
+- Common phrases: "Diagnosed with...", "Impression:"
+- Include ICD terms like "radiculopathy", "herniation"
+- List all identified conditions
+
+📌 plan
+- Extract future treatments and recommendations
+- Examples: "Plan is to get MRI", "Referred to PT"
+- Include follow-up plans and referrals
+
+📌 prior_treatments
+- Document past medical procedures and treatments
+- Examples: "previous injections", "underwent PT for 6 weeks"
+- Include duration and outcomes if mentioned
+
+📌 exam_findings
+- Extract specific clinical exam signs
+- Examples: "Positive straight leg raise", "reduced reflexes"
+- Include objective measurements and test results
+
+📌 imaging_summary
+- Document any imaging results mentioned
+- Example: "MRI showed disc bulge at L5-S1"
+- Include modality, findings, and relevant levels
+
+📌 qpp_measures
+- Identify quality program measures
+- Examples: "Tobacco use screening", "Pain reassessment"
+- Include measure status: "Met", "Exclusion", or "Denied"
+
+📌 recommended_cpt_codes
+- Match procedures to real CPT codes from 2024 CPT Codebook
+- Example structure:
+{
+  "code": "72148",
+  "description": "MRI lumbar spine w/o contrast",
+  "requires_lcd": true,
+  "lcd_code": "L34220",
+  "lcd_requirements": [
+    "Indication of radiculopathy or herniation",
+    "Failure of conservative therapy"
+  ],
+  "lcd_status": "Meets"
+}
+- Include ALL relevant CPT codes mentioned or implied
+- Validate against LCD requirements when applicable
+
 🎯 Your output must follow this structure:
 
 {
