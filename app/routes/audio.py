@@ -133,6 +133,9 @@ async def transcribe_audio(
         transcript_processor = TranscriptProcessor()
         extracted_data = await transcript_processor.process(transcript)
 
+        # Ensure recommended_cpt_codes are not included in extracted_data
+        extracted_data.pop("recommended_cpt_codes", None)
+
         # Agent 2: Json_to_icd
         logger.info("Calling Agent2: Json_to_icd")
         try:
