@@ -27,6 +27,7 @@ class LCDValidationResult(BaseModel):
     lcd_code: Optional[str] = None
     requirements: Optional[List[str]] = None
     status: Optional[str] = None # e.g., "Meets" | "Partially Meets" | "Does Not Meet"
+    lcd_url: Optional[str] = None
 
 class TranscriptResponse(BaseModel):
     patient_info: Optional[PatientInfo] = None
@@ -44,12 +45,13 @@ class TranscriptResponse(BaseModel):
     exam_findings: Optional[str] = None
     imaging_summary: Optional[str] = None
     qpp_measures: Optional[List[QPPMeasure]] = None
-    recommended_cpt_codes: List[CPTCode] = []
-    lcd_validation: List[LCDValidationResult] = []
-    icd_codes: List[str] = []
+    recommended_cpt_codes: Optional[List[CPTCode]] = []
+    lcd_validation: Optional[List[LCDValidationResult]] = []
+    icd_codes: Optional[List[str]] = []
     follow_up_instructions: Optional[str] = None
     date: Optional[str] = None
     prompt: Optional[str] = None  # Original transcript/prompt
+    evidence_suggestions: Optional[List[str]] = []
 
     # New fields for agent orchestration results
     icd_codes: Optional[List[str]] = Field(default_factory=list)
