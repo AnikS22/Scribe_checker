@@ -67,20 +67,28 @@ class TranscriptProcessor:
         {transcript}
 
         Required fields:
-        - date: Visit date (YYYY-MM-DD)
-        - diagnosis: Primary diagnosis
-        - pain_rating: Pain level (0-10) with location
-        - prior_treatment: Array of previous treatments
-        - subjective_complaints: Patient's reported symptoms
-        - objective_findings: Object containing:
-          - range_of_motion: ROM findings
-          - tenderness: Areas of tenderness
-          - neurological_deficits: Any neurological findings
+        - patient_info: Object containing:
+          - age: Patient's age
+          - sex: Patient's sex
+          - visit_date: Visit date (YYYY-MM-DD)
+          - visit_location: Location of visit
+        - chief_complaint: Primary reason for visit
+        - history_of_present_illness: Detailed history
         - assessment: Clinical assessment
-        - plan: Array of treatment plans
-        - functional_limitations: Impact on daily activities
-        - symptom_duration: How long symptoms present
-        - procedures_mentioned: Array of mentioned procedures
+        - plan: Treatment plan
+        - pain_rating: Object containing:
+          - level: Pain level (0-10)
+          - location: Location of pain
+        - prior_treatments: Previous treatments
+        - vital_signs: Vital signs
+        - past_medical_history: PMH
+        - social_history: Social history
+        - family_history: Family history
+        - review_of_systems: ROS
+        - exam_findings: Physical exam findings
+        - imaging_summary: Imaging results
+        - follow_up_instructions: Follow-up plan
+        - date: Visit date (YYYY-MM-DD)
 
         Return the data in valid JSON format."""
     
@@ -94,34 +102,62 @@ class TranscriptProcessor:
         Returns:
             Cleaned and validated data
         """
-        # Ensure all required fields exist
-        required_fields = {
-            "date", "diagnosis", "pain_rating", "prior_treatment",
-            "subjective_complaints", "objective_findings", "assessment",
-            "plan", "functional_limitations", "symptom_duration",
-            "procedures_mentioned"
+        # Define default values for all fields
+        default_values = {
+            "patient_info": {
+                "age": None,
+                "sex": None,
+                "visit_date": None,
+                "visit_location": None
+            },
+            "chief_complaint": None,
+            "history_of_present_illness": None,
+            "assessment": None,
+            "plan": None,
+            "pain_rating": {
+                "level": None,
+                "location": None
+            },
+            "prior_treatments": None,
+            "vital_signs": None,
+            "past_medical_history": None,
+            "social_history": None,
+            "family_history": None,
+            "review_of_systems": None,
+            "exam_findings": None,
+            "imaging_summary": None,
+            "follow_up_instructions": None,
+            "date": None
         }
         
         # Add missing fields with default values
-        for field in required_fields:
+        for field, default_value in default_values.items():
             if field not in data:
-                if field in ["prior_treatment", "plan", "procedures_mentioned"]:
-                    data[field] = []
-                elif field == "objective_findings":
-                    data[field] = {
-                        "range_of_motion": "",
-                        "tenderness": "",
-                        "neurological_deficits": ""
-                    }
-                else:
-                    data[field] = ""
+                data[field] = default_value
         
-        # Clean and standardize data
-        if isinstance(data["prior_treatment"], str):
-            data["prior_treatment"] = [data["prior_treatment"]]
-        if isinstance(data["plan"], str):
-            data["plan"] = [data["plan"]]
-        if isinstance(data["procedures_mentioned"], str):
-            data["procedures_mentioned"] = [data["procedures_mentioned"]]
+        # Ensure patient_info is properly structured
+        if not isinstance(data.get("patient_info"), dict):
+            data["patient_info"] = default_values["patient_info"]
+        else:
+            for key in ["age", "sex", "visit_date", "visit_location"]:
+                if key not in data["patient_info"]:
+                    data["patient_info"][key] = None
+        
+        # Ensure pain_rating is properly structured
+        if isinstance(data.get("pain_rating"), str):
+            # Try to parse pain rating from string (e.g., "7/10 in lower back")
+            try:
+                parts = data["pain_rating"].split(" in ", 1)
+                level = parts[0].split("/")[0] if "/" in parts[0] else None
+                location = parts[1] if len(parts) > 1 else None
+                data["pain_rating"] = {"level": level, "location": location}
+            except:
+                data["pain_rating"] = {"level": None, "location": data["pain_rating"]}
+        elif not isinstance(data.get("pain_rating"), dict):
+            data["pain_rating"] = default_values["pain_rating"]
+        
+        # Convert prior_treatments to string if it's a list
+        if isinstance(data.get("prior_treatments"), list):
+            data["prior_treatments"] = ", ".join(data["prior_treatments"])
         
         return data 

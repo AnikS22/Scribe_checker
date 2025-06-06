@@ -12,6 +12,10 @@ from app.services.transcript_processor import TranscriptProcessor
 from app.services.cpt_lcd_matcher import CPTLCDMatcher
 from app.core.config import settings
 from app.core.security import verify_api_key
+from app.models.transcript_response import (
+    TranscriptResponse, PatientInfo, PainRating,
+    QPPMeasure, CPTCode
+)
 
 # Configure logging
 logging.basicConfig(
@@ -135,34 +139,10 @@ def anonymize_transcript(transcript: str) -> str:
     
     return transcript
 
-class PainRating(BaseModel):
-    level: Optional[int] = None
-    location: Optional[str] = None
-
 class TranscriptRequest(BaseModel):
     transcript: str
     patient_id: Optional[str] = None
     visit_date: Optional[datetime] = None
-
-class TranscriptResponse(BaseModel):
-    date: Optional[str] = None
-    diagnosis: Optional[str] = None
-    pain_rating: Optional[PainRating] = None
-    prior_treatment: Optional[List[str]] = []
-    subjective_complaints: Optional[str] = None
-    objective_findings: Optional[Dict[str, Any]] = {
-        "range_of_motion": None,
-        "tenderness": None,
-        "neurological_deficits": None
-    }
-    assessment: Optional[str] = None
-    plan: Optional[List[str]] = []
-    functional_limitations: Optional[str] = None
-    symptom_duration: Optional[str] = None
-    procedures_mentioned: Optional[List[str]] = []
-    cpt_suggestions: Optional[List[str]] = []
-    lcd_codes: Optional[List[str]] = []
-    lcd_warnings: Optional[List[str]] = []
 
 @app.post("/process_transcript", response_model=TranscriptResponse)
 async def process_transcript(
@@ -198,8 +178,40 @@ async def process_transcript(
         # Match CPT/LCD codes
         coding_data = await cpt_lcd_matcher.match(extracted_data)
         
-        # Combine results
-        response_data = {**extracted_data, **coding_data}
+        # Convert coding data to new format
+        cpt_codes = [
+            CPTCode(
+                code=code,
+                description=coding_data.get("descriptions", {}).get(code, ""),
+                requires_lcd=code in coding_data.get("lcd_codes", []),
+                lcd_code=coding_data.get("lcd_codes", {}).get(code)
+            )
+            for code in coding_data.get("cpt_suggestions", [])
+        ]
+        
+        # Create patient info from request
+        patient_info = PatientInfo(
+            visit_date=request.visit_date.isoformat() if request.visit_date else None,
+            visit_location=None  # Could be extracted from transcript if available
+        )
+        
+        # Combine results into new format
+        response_data = {
+            "patient_info": patient_info,
+            "chief_complaint": extracted_data.get("chief_complaint"),
+            "history_of_present_illness": extracted_data.get("history_of_present_illness"),
+            "assessment": extracted_data.get("assessment"),
+            "plan": extracted_data.get("plan"),
+            "pain_rating": PainRating(
+                level=str(extracted_data.get("pain_rating", {}).get("level")),
+                location=extracted_data.get("pain_rating", {}).get("location")
+            ) if extracted_data.get("pain_rating") else None,
+            "prior_treatments": ", ".join(extracted_data.get("prior_treatment", [])),
+            "exam_findings": extracted_data.get("objective_findings", {}).get("range_of_motion"),
+            "recommended_cpt_codes": cpt_codes,
+            "qpp_measures": [],  # To be implemented
+            "date": extracted_data.get("date")
+        }
         
         return TranscriptResponse(**response_data)
         
