@@ -44,7 +44,9 @@ class TranscriptResponse(BaseModel):
     exam_findings: Optional[str] = None
     imaging_summary: Optional[str] = None
     qpp_measures: Optional[List[QPPMeasure]] = None
-    recommended_cpt_codes: Optional[List[CPTCode]] = None
+    recommended_cpt_codes: List[CPTCode] = []
+    lcd_validation: List[LCDValidationResult] = []
+    icd_codes: List[str] = []
     follow_up_instructions: Optional[str] = None
     date: Optional[str] = None
     prompt: Optional[str] = None  # Original transcript/prompt

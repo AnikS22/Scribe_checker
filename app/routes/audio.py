@@ -115,7 +115,6 @@ async def transcribe_audio(
 
         # Transcribe audio using Whisper
         logger.info(f"Transcribing audio file: {file.filename}")
-        # Use openai_client instead of openai if both were imported
         whisper_response = await openai_client.audio.transcriptions.create(
             model="whisper-1",
             file=(file.filename, audio_bytes),
@@ -134,64 +133,59 @@ async def transcribe_audio(
         transcript_processor = TranscriptProcessor()
         extracted_data = await transcript_processor.process(transcript)
 
-        # Agents 2 & 6: Json_to_icd and CPTcodes (Run in parallel)
-        logger.info("Calling Agents 2 & 6 in parallel")
-        # Replace hardcoded agent_ids with references from agents_config.py
-        icd_codes_task = asyncio.create_task(
-            call_assistant_agent(agent_id=AGENT_IDS["json_to_icd"], input_data=extracted_data)
-        )
-        cpt_codes_task = asyncio.create_task(
-            call_assistant_agent(agent_id=AGENT_IDS["cpt_codes"], input_data=extracted_data)
-        )
-
-        # Wait for parallel tasks to complete and handle potential errors
+        # Agent 2: Json_to_icd
+        logger.info("Calling Agent2: Json_to_icd")
         try:
-            icd_codes_raw_response, cpt_codes_raw_response = await asyncio.gather(
-                icd_codes_task,
-                cpt_codes_task
+            icd_codes_raw_response = await call_assistant_agent(
+                agent_id=AGENT_IDS["json_to_icd"],
+                input_data=extracted_data # Input is full extracted data
             )
+            icd_parsed_data = json.loads(icd_codes_raw_response) if icd_codes_raw_response else {}
         except Exception as e:
-            logger.error(f"Error during parallel agent calls (ICD/CPT): {e}")
-            raise HTTPException(status_code=500, detail=f"Error processing data with ICD/CPT agents: {e}")
+             logger.error(f"Error during ICD agent call: {e}")
+             icd_parsed_data = {}
+             raise HTTPException(status_code=500, detail=f"Error processing data with ICD agent: {e}")
 
-        # Parse raw JSON string responses from agents
+        # Agent 6: CPTcodes (Input includes extracted_data fields + ICD codes)
+        logger.info("Calling Agent6: CPTcodes")
+        # Prepare input for CPT agent including relevant fields from extracted_data and icd_codes
+        cpt_agent_input = {
+            "chief_complaint": extracted_data.get("chief_complaint"),
+            "assessment": extracted_data.get("assessment"),
+            "plan": extracted_data.get("plan"),
+            "exam_findings": extracted_data.get("exam_findings"), # Include other relevant fields
+            "imaging_summary": extracted_data.get("imaging_summary"),
+            "history_of_present_illness": extracted_data.get("history_of_present_illness"),
+            "prior_treatments": extracted_data.get("prior_treatments"),
+            "icd_codes": icd_parsed_data.get("icd_codes", []) # Include ICD codes from Agent 2
+        }
         try:
-            # Assuming ICD agent returns a JSON list of strings, e.g., '["M54.5", "G89.1"]'.
-            # Need to handle potential empty or invalid responses.
-            icd_codes = json.loads(icd_codes_raw_response) if icd_codes_raw_response else []
-            if not isinstance(icd_codes, list):
-                 raise ValueError("ICD agent did not return a list")
-
-            # Assuming CPT agent returns a JSON list of CPT code dictionaries.
-            cpt_codes_response = json.loads(cpt_codes_raw_response) if cpt_codes_raw_response else []
-            if not isinstance(cpt_codes_response, list):
-                 raise ValueError("CPT agent did not return a list")
-
-        except (json.JSONDecodeError, ValueError) as e:
-             logger.error(f"Error parsing agent responses (ICD/CPT): {e}")
-             raise HTTPException(status_code=500, detail=f"Error parsing data from ICD/CPT agents: {e}")
+            cpt_codes_raw_response = await call_assistant_agent(
+                agent_id=AGENT_IDS["cpt_codes"],
+                input_data=cpt_agent_input
+            )
+            cpt_parsed_data = json.loads(cpt_codes_raw_response) if cpt_codes_raw_response else {}
+        except Exception as e:
+            logger.error(f"Error during CPT agent call: {e}")
+            cpt_parsed_data = {}
+            raise HTTPException(status_code=500, detail=f"Error processing data with CPT agent: {e}")
 
         # Agent 5: LCD_Validator_Agentv1 (Depends on CPT codes response)
         logger.info("Calling Agent5: LCD_Validator_Agentv1")
-        # Replace hardcoded agent_id with reference from agents_config.py
+        # Pass the parsed CPT response data (specifically the list of CPT codes) to the LCD validator agent
+        lcd_agent_input = {
+            "recommended_cpt_codes": cpt_parsed_data.get("recommended_cpt_codes", [])
+        }
         try:
             lcd_validation_raw_response = await call_assistant_agent(
                 agent_id=AGENT_IDS["lcd_validator"],
-                input_data=cpt_codes_response # Pass the parsed CPT response
+                input_data=lcd_agent_input
             )
+            lcd_parsed_data = json.loads(lcd_validation_raw_response) if lcd_validation_raw_response else {}
         except Exception as e:
-            logger.error(f"Error during LCD validator agent call: {e}")
-            raise HTTPException(status_code=500, detail=f"Error processing data with LCD validator agent: {e}")
-
-        # Parse raw JSON string response from LCD agent
-        try:
-            # Assuming LCD agent returns a JSON list of LCD validation result dictionaries.
-            lcd_validation_results = json.loads(lcd_validation_raw_response) if lcd_validation_raw_response else []
-            if not isinstance(lcd_validation_results, list):
-                 raise ValueError("LCD agent did not return a list")
-        except (json.JSONDecodeError, ValueError) as e:
-             logger.error(f"Error parsing LCD agent response: {e}")
-             raise HTTPException(status_code=500, detail=f"Error parsing data from LCD validator agent: {e}")
+             logger.error(f"Error during LCD validator agent call: {e}")
+             lcd_parsed_data = {}
+             raise HTTPException(status_code=500, detail=f"Error processing data with LCD validator agent: {e}")
 
         # --- Merge Results ---
 
@@ -199,13 +193,20 @@ async def transcribe_audio(
         # Start with the data from the Clinical Extractor
         response_data = extracted_data.copy()
 
-        # Add/Overwrite fields from other agents
-        # Ensure the merged data matches the TranscriptResponse Pydantic model
-        response_data["icd_codes"] = icd_codes
-        # Ensure recommended_cpt_codes matches the structure expected by the Pydantic model
-        response_data["recommended_cpt_codes"] = cpt_codes_response
-        response_data["lcd_validation"] = lcd_validation_results
-        response_data["prompt"] = transcript # Ensure original prompt is included
+        # Add/Overwrite fields from other agents, using .get() with default empty list to guarantee presence
+        # Ensure parsed data is treated as a dictionary for safe .get() calls. Default to {} if parsing failed.
+        icd_dict = icd_parsed_data if isinstance(icd_parsed_data, dict) else {}
+        cpt_dict = cpt_parsed_data if isinstance(cpt_parsed_data, dict) else {}
+        lcd_dict = lcd_parsed_data if isinstance(lcd_parsed_data, dict) else {}
+
+        # Ensure recommended_cpt_codes from Agent 1 are ignored by not including them explicitly here
+        # We only take recommended_cpt_codes from the CPT agent (Agent 6)
+
+        response_data["icd_codes"] = icd_dict.get("icd_codes", [])
+        response_data["recommended_cpt_codes"] = cpt_dict.get("recommended_cpt_codes", [])
+        response_data["lcd_validation"] = lcd_dict.get("lcd_validation", [])
+        # Ensure prompt from Agent 1 is included
+        response_data["prompt"] = extracted_data.get("prompt", transcript) if extracted_data.get("prompt") else transcript
 
         # Return the merged results using the Pydantic model for validation/serialization
         return TranscriptResponse(**response_data)
