@@ -16,32 +16,42 @@ from app.models.transcript_response import (
     TranscriptResponse, PatientInfo, PainRating,
     QPPMeasure, CPTCode
 )
-from app.routes.audio import router as audio_router
+from app.routes import transcript, audio
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO if settings.DEBUG_MODE else logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Clinical Transcript Processor",
-    description="API for processing clinical transcripts and generating insurance-compliant documentation",
+    title="Scribe Checker API",
+    description="API for processing clinical transcripts and audio recordings",
     version="1.0.0"
 )
 
-# Configure CORS for iOS app
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific iOS app domain
+    allow_origins=["*"],  # In production, replace with specific origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(audio_router, prefix="/api/v1", tags=["audio"])
+app.include_router(
+    transcript.router,
+    prefix="/api/v1",
+    tags=["transcript"]
+)
+
+app.include_router(
+    audio.router,
+    prefix="/api/v1",
+    tags=["audio"]
+)
 
 # API Key security
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
@@ -223,10 +233,21 @@ async def process_transcript(
         logger.error(f"Error processing transcript: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health")
+@app.get("/")
+async def root():
+    """Health check endpoint."""
+    return {"status": "healthy", "version": "1.0.0"}
+
+@app.get("/api/v1/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    """Detailed health check endpoint."""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "debug_mode": settings.DEBUG_MODE,
+        "api_key_configured": bool(settings.API_KEY),
+        "openai_configured": bool(settings.OPENAI_API_KEY)
+    }
 
 if __name__ == "__main__":
     import uvicorn
